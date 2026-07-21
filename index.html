@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GWREMS — Ground Water Resource Evaluation & Monitoring System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --strata-topsoil:#5b3a29;
+  --strata-sand:#c9a66b;
+  --strata-clay:#8a6d3b;
+  --strata-rock:#4b4238;
+  --aquifer-deep:#0b3954;
+  --aquifer-mid:#087e8b;
+  --aquifer-bright:#33c1d4;
+  --bg:#f2f0e9;
+  --panel:#ffffff;
+  --ink:#0b1f22;
+  --ink-soft:#4a5a5c;
+  --safe:#3a9b5c;
+  --semi:#e8b93a;
+  --critical:#e8792e;
+  --over:#c8382c;
+  --line:#d9d3c2;
+  --shadow: 0 10px 30px rgba(11,57,84,.10);
+  --radius: 14px;
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+@font-face{ /* fallback safety, using system stack below via var */ }
+h1,h2,h3,.display{
+  font-family:'Space Grotesk','Trebuchet MS', sans-serif;
+  letter-spacing:-0.01em;
+}
+.mono{ font-family:'IBM Plex Mono','Courier New',monospace; letter-spacing:0.02em; }
+
+a{color:inherit;}
+img,svg{display:block;max-width:100%;}
+
+/* ============ LAYOUT HELPERS ============ */
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+.grid{display:grid;gap:20px;}
+
+/* ============ NAV ============ */
+header.nav{
+  position:sticky;top:0;z-index:50;
+  background:rgba(242,240,233,.85);
+  backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.nav-inner{
+  max-width:1180px;margin:0 auto;padding:14px 28px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.05rem;}
+.brand .drop{
+  width:30px;height:30px;border-radius:50% 50% 50% 0;
+  background:linear-gradient(160deg,var(--aquifer-bright),var(--aquifer-deep));
+  transform:rotate(45deg);
+  box-shadow:0 4px 10px rgba(8,126,139,.35);
+}
+.brand span{transform:none;}
+nav.links{display:flex;gap:26px;font-size:.92rem;font-weight:600;}
+nav.links a{text-decoration:none;color:var(--ink-soft);padding:6px 2px;border-bottom:2px solid transparent;transition:.2s;}
+nav.links a:hover{color:var(--aquifer-deep);border-color:var(--aquifer-bright);}
+.nav-cta{
+  background:var(--aquifer-deep);color:#fff;border:none;padding:10px 18px;
+  border-radius:999px;font-weight:700;font-size:.85rem;cursor:pointer;
+  box-shadow:0 6px 16px rgba(11,57,84,.25);
+}
+
+/* ============ HERO ============ */
+.hero{padding:64px 0 20px;position:relative;overflow:hidden;}
+.hero-grid{
+  display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;
+}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  background:#e4f5f2;color:var(--aquifer-mid);
+  font-weight:700;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+  padding:6px 12px;border-radius:999px;margin-bottom:18px;
+}
+.eyebrow .dot{width:8px;height:8px;border-radius:50%;background:var(--safe);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+h1.headline{font-size:clamp(2.1rem,4.2vw,3.4rem);line-height:1.05;margin:0 0 18px;color:var(--aquifer-deep);}
+h1.headline em{font-style:normal;color:var(--aquifer-mid);}
+.sub{font-size:1.08rem;color:var(--ink-soft);max-width:520px;margin-bottom:28px;line-height:1.6;}
+.hero-actions{display:flex;gap:14px;flex-wrap:wrap;}
+.btn-primary{
+  background:var(--aquifer-deep);color:#fff;border:none;padding:14px 24px;border-radius:10px;
+  font-weight:700;font-size:.95rem;cursor:pointer;box-shadow:var(--shadow);transition:.2s;
+}
+.btn-primary:hover{transform:translateY(-2px);background:var(--aquifer-mid);}
+.btn-ghost{
+  background:transparent;border:1.5px solid var(--aquifer-deep);color:var(--aquifer-deep);
+  padding:14px 24px;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;
+}
+.btn-ghost:hover{background:rgba(11,57,84,.06);}
+
+.hero-stats{display:flex;gap:26px;margin-top:34px;flex-wrap:wrap;}
+.hstat b{display:block;font-family:'Space Grotesk';font-size:1.6rem;color:var(--aquifer-deep);}
+.hstat span{font-size:.78rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+
+/* ============ SIGNATURE: AQUIFER CROSS SECTION ============ */
+.cross-section{
+  background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:18px 18px 10px;border:1px solid var(--line);
+}
+.cross-section .cs-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:0 4px;}
+.cross-section .cs-head h3{margin:0;font-size:.9rem;color:var(--ink-soft);font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.cross-section .cs-head .depth-readout{font-family:'IBM Plex Mono';font-weight:700;color:var(--aquifer-mid);font-size:1rem;}
+#strataSvg{width:100%;height:auto;border-radius:8px;overflow:hidden;}
+.cs-caption{font-size:.75rem;color:var(--ink-soft);text-align:center;padding:8px 0 4px;}
+.cs-slider{width:100%;padding:6px 8px 14px;}
+.cs-slider input[type=range]{width:100%;accent-color:var(--aquifer-mid);}
+.cs-slider .labels{display:flex;justify-content:space-between;font-size:.7rem;color:var(--ink-soft);font-family:'IBM Plex Mono';margin-top:-2px;}
+
+/* ============ SECTION HEADERS ============ */
+.section{padding:70px 0;}
+.section-head{max-width:640px;margin:0 auto 42px;text-align:center;}
+.section-head .kicker{color:var(--aquifer-mid);font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;}
+.section-head h2{font-size:clamp(1.6rem,3vw,2.2rem);margin:8px 0 12px;color:var(--aquifer-deep);}
+.section-head p{color:var(--ink-soft);line-height:1.6;}
+.section.alt{background:#eaf3ee;}
+
+/* ============ STATION CARDS ============ */
+.station-grid{grid-template-columns:repeat(auto-fill,minmax(250px,1fr));}
+.station-card{
+  background:var(--panel);border-radius:var(--radius);padding:20px;
+  border:1px solid var(--line);box-shadow:var(--shadow);
+  border-top:5px solid var(--status-color,var(--aquifer-mid));
+  transition:.2s;
+}
+.station-card:hover{transform:translateY(-4px);}
+.station-card .row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}
+.station-card h4{margin:0;font-size:1.02rem;}
+.station-card .loc{font-size:.78rem;color:var(--ink-soft);margin-top:2px;}
+.badge{
+  font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+  padding:4px 9px;border-radius:999px;color:#fff;background:var(--status-color,var(--aquifer-mid));
+  white-space:nowrap;
+}
+.station-card .metric{display:flex;align-items:baseline;gap:6px;margin-top:10px;}
+.station-card .metric b{font-family:'Space Grotesk';font-size:1.5rem;color:var(--aquifer-deep);}
+.station-card .metric span{font-size:.75rem;color:var(--ink-soft);}
+.trend{font-size:.78rem;margin-top:6px;font-weight:600;}
+.trend.up{color:var(--over);}
+.trend.down{color:var(--safe);}
+.trend.flat{color:var(--ink-soft);}
+.legend{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:30px;}
+.legend .item{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--ink-soft);font-weight:600;}
+.legend .sw{width:12px;height:12px;border-radius:3px;}
+
+/* ============ CHART PANEL ============ */
+.panel{
+  background:var(--panel);border-radius:var(--radius);border:1px solid var(--line);
+  box-shadow:var(--shadow);padding:26px;
+}
+.chart-controls{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;}
+.chart-controls h3{margin:0;font-size:1.1rem;color:var(--aquifer-deep);}
+.select-row{display:flex;gap:10px;}
+select{
+  padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:#fbfaf6;
+  font-family:inherit;font-size:.85rem;color:var(--ink);cursor:pointer;
+}
+canvas{max-height:340px;}
+
+/* ============ TWO COL: FORM + ALERTS ============ */
+.two-col{grid-template-columns:1.1fr .9fr;align-items:start;}
+form.entry-form{display:grid;gap:16px;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field label{font-size:.78rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+.field input,.field select{
+  padding:12px 14px;border-radius:8px;border:1px solid var(--line);background:#fbfaf6;
+  font-family:inherit;font-size:.92rem;color:var(--ink);
+}
+.field input:focus,.field select:focus,select:focus,input:focus{
+  outline:none;border-color:var(--aquifer-mid);box-shadow:0 0 0 3px rgba(8,126,139,.15);
+}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.submit-btn{
+  background:var(--aquifer-mid);color:#fff;border:none;padding:14px;border-radius:10px;
+  font-weight:700;cursor:pointer;font-size:.95rem;transition:.2s;
+}
+.submit-btn:hover{background:var(--aquifer-deep);}
+.form-msg{font-size:.82rem;font-weight:600;color:var(--safe);min-height:18px;}
+
+.alerts-panel h3{margin:0 0 16px;font-size:1.1rem;color:var(--aquifer-deep);}
+.alert-item{
+  display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);
+}
+.alert-item:last-child{border-bottom:none;}
+.alert-dot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex-shrink:0;background:var(--status-color);}
+.alert-item h5{margin:0 0 3px;font-size:.9rem;}
+.alert-item p{margin:0;font-size:.8rem;color:var(--ink-soft);line-height:1.4;}
+.alert-item time{font-size:.7rem;color:#94a0a1;font-family:'IBM Plex Mono';}
+
+/* ============ LOG TABLE ============ */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);}
+table{width:100%;border-collapse:collapse;font-size:.86rem;min-width:640px;}
+thead th{
+  text-align:left;padding:14px 18px;background:var(--aquifer-deep);color:#fff;
+  font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;
+}
+tbody td{padding:13px 18px;border-bottom:1px solid var(--line);color:var(--ink-soft);}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:#f7f5ee;}
+tbody td.st-cat{font-weight:700;}
+
+/* ============ FOOTER ============ */
+footer{background:var(--aquifer-deep);color:#cfe6e9;padding:50px 0 24px;margin-top:40px;}
+.footer-grid{grid-template-columns:1.4fr .8fr .8fr .8fr;gap:30px;}
+footer h4{color:#fff;font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;margin:0 0 14px;}
+footer p, footer li{font-size:.85rem;line-height:1.7;color:#a9c7cb;}
+footer ul{list-style:none;padding:0;margin:0;}
+footer a{text-decoration:none;color:#a9c7cb;}
+footer a:hover{color:#fff;}
+.footer-bottom{
+  border-top:1px solid rgba(255,255,255,.12);margin-top:36px;padding-top:20px;
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:.75rem;color:#7fa4a9;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:900px){
+  .hero-grid{grid-template-columns:1fr;}
+  .two-col{grid-template-columns:1fr;}
+  nav.links{display:none;}
+  .footer-grid{grid-template-columns:1fr 1fr;}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none !important;transition:none !important;}
+}
+:focus-visible{outline:3px solid var(--aquifer-bright);outline-offset:2px;}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><div class="drop"></div><span>GWREMS</span></div>
+    <nav class="links">
+      <a href="#stations">Monitoring Stations</a>
+      <a href="#trends">Water Level Trends</a>
+      <a href="#report">Log a Reading</a>
+      <a href="#alerts">Alerts</a>
+    </nav>
+    <button class="nav-cta" onclick="downloadCSV()">Download Data (CSV)</button>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow"><span class="dot"></span> Live network — 4 states, 12 districts</div>
+      <h1 class="headline">Know what's happening <em>below the surface.</em></h1>
+      <p class="sub">GWREMS tracks water table depth, recharge and extraction across piezometer networks, flags stressed aquifers early, and turns raw dip readings into decisions anyone can act on.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="document.getElementById('report').scrollIntoView()">Log a Reading</button>
+        <button class="btn-ghost" onclick="document.getElementById('stations').scrollIntoView()">View Stations</button>
+      </div>
+      <div class="hero-stats">
+        <div class="hstat"><b>128</b><span>Wells Monitored</span></div>
+        <div class="hstat"><b id="heroAvg">14.6 m</b><span>Avg. Water Table</span></div>
+        <div class="hstat"><b style="color:var(--critical)">9</b><span>Stressed Blocks</span></div>
+        <div class="hstat"><b>93%</b><span>Network Uptime</span></div>
+      </div>
+    </div>
+
+    <div class="cross-section">
+      <div class="cs-head">
+        <h3>Aquifer Cross-Section — Well KVL-07</h3>
+        <div class="depth-readout mono"><span id="depthReadout">14.6</span> m bgl</div>
+      </div>
+      <svg id="strataSvg" viewBox="0 0 480 300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#33c1d4"/>
+            <stop offset="100%" stop-color="#0b3954"/>
+          </linearGradient>
+          <pattern id="rockPattern" width="14" height="14" patternUnits="userSpaceOnUse">
+            <rect width="14" height="14" fill="#4b4238"/>
+            <circle cx="4" cy="4" r="1.4" fill="#5b5044"/>
+            <circle cx="11" cy="10" r="1.6" fill="#3d362d"/>
+          </pattern>
+        </defs>
+        <!-- ground surface strip -->
+        <rect x="0" y="0" width="480" height="26" fill="#7ea86b"/>
+        <rect x="0" y="22" width="480" height="8" fill="#5b3a29"/>
+        <!-- topsoil -->
+        <rect x="0" y="30" width="480" height="40" fill="#8a6a4a"/>
+        <!-- sand layer -->
+        <rect x="0" y="70" width="480" height="60" fill="#c9a66b"/>
+        <!-- clay layer -->
+        <rect x="0" y="130" width="480" height="45" fill="#8a6d3b"/>
+        <!-- saturated aquifer zone -->
+        <rect id="waterZone" x="0" y="175" width="480" height="90" fill="url(#waterGrad)"/>
+        <!-- bedrock -->
+        <rect x="0" y="265" width="480" height="35" fill="url(#rockPattern)"/>
+
+        <!-- well casing -->
+        <rect x="228" y="0" width="10" height="300" fill="#e9e4d6" stroke="#b9b09a" stroke-width="1"/>
+        <rect x="230" y="0" width="6" height="300" fill="#f6f3ea"/>
+
+        <!-- water table line (animated by JS) -->
+        <line id="waterTableLine" x1="0" x2="480" y1="175" y2="175" stroke="#ffffff" stroke-width="2" stroke-dasharray="6 5"/>
+        <polygon id="waterTableMark" points="233,168 245,182 221,182" fill="#ffffff"/>
+
+        <text x="12" y="18" font-family="IBM Plex Mono" font-size="9" fill="#233" opacity=".65">GROUND LEVEL</text>
+        <text x="12" y="95" font-family="IBM Plex Mono" font-size="9" fill="#3a2c17">UNSATURATED SAND</text>
+        <text x="12" y="222" font-family="IBM Plex Mono" font-size="9" fill="#eafcff">SATURATED AQUIFER</text>
+        <text x="12" y="286" font-family="IBM Plex Mono" font-size="9" fill="#d7cfbf">BEDROCK</text>
+      </svg>
+      <p class="cs-caption">Drag to simulate a dip reading and see the water table shift in the cross-section.</p>
+      <div class="cs-slider">
+        <input type="range" id="depthSlider" min="2" max="28" step="0.1" value="14.6" oninput="updateStrata(this.value)">
+        <div class="labels"><span>2 m (shallow)</span><span>28 m (deep)</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="stations">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Monitoring Network</div>
+      <h2>Stations, classified the way hydrogeologists actually read them</h2>
+      <p>Each block is categorised by stage of groundwater extraction — Safe, Semi-Critical, Critical, or Over-Exploited — following CGWB conventions, so a glance tells you where to act first.</p>
+    </div>
+
+    <div class="grid station-grid" id="stationGrid"></div>
+
+    <div class="legend">
+      <div class="item"><span class="sw" style="background:var(--safe)"></span>Safe (&lt;70% extraction)</div>
+      <div class="item"><span class="sw" style="background:var(--semi)"></span>Semi-Critical (70–90%)</div>
+      <div class="item"><span class="sw" style="background:var(--critical)"></span>Critical (90–100%)</div>
+      <div class="item"><span class="sw" style="background:var(--over)"></span>Over-Exploited (&gt;100%)</div>
+    </div>
+  </div>
+</section>
+
+<section class="section alt" id="trends">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Trend Analysis</div>
+      <h2>Water levels over time, by station</h2>
+      <p>Compare seasonal recharge against drawdown across the monitoring year.</p>
+    </div>
+
+    <div class="panel">
+      <div class="chart-controls">
+        <h3>Depth to Water Level (metres below ground level)</h3>
+        <div class="select-row">
+          <select id="stationSelect" onchange="renderChart()"></select>
+          <select id="yearSelect" onchange="renderChart()">
+            <option>2026</option>
+            <option>2025</option>
+          </select>
+        </div>
+      </div>
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="report">
+  <div class="wrap grid two-col">
+    <div class="panel">
+      <div class="section-head" style="text-align:left;margin:0 0 24px;">
+        <div class="kicker">Field Data Entry</div>
+        <h2 style="font-size:1.5rem;">Log a new dip reading</h2>
+      </div>
+      <form class="entry-form" onsubmit="submitReading(event)">
+        <div class="field-row">
+          <div class="field">
+            <label for="fStation">Station</label>
+            <select id="fStation" required></select>
+          </div>
+          <div class="field">
+            <label for="fDate">Date</label>
+            <input type="date" id="fDate" required>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="fDepth">Water Level (m bgl)</label>
+            <input type="number" id="fDepth" step="0.1" min="0" max="60" placeholder="e.g. 15.2" required>
+          </div>
+          <div class="field">
+            <label for="fMethod">Measurement Method</label>
+            <select id="fMethod">
+              <option>Electric Water Level Indicator</option>
+              <option>DWLR (Automatic Logger)</option>
+              <option>Manual Tape Sounding</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="fNotes">Field Notes (optional)</label>
+          <input type="text" id="fNotes" placeholder="Any observations — pump running, rainfall, etc.">
+        </div>
+        <button type="submit" class="submit-btn">Save Reading</button>
+        <div class="form-msg" id="formMsg"></div>
+      </form>
+    </div>
+
+    <div class="panel alerts-panel" id="alerts">
+      <h3>Recent Alerts</h3>
+      <div id="alertList"></div>
+    </div>
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Field Log</div>
+      <h2>Latest readings across the network</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Station</th><th>District</th><th>Water Level (m bgl)</th><th>Change</th><th>Category</th></tr>
+        </thead>
+        <tbody id="logTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap grid footer-grid">
+    <div>
+      <div class="brand" style="color:#fff;"><div class="drop"></div><span>GWREMS</span></div>
+      <p style="margin-top:14px;max-width:280px;">Ground Water Resource Evaluation and Monitoring System — a single-file reference dashboard for tracking aquifer health, piezometer readings and extraction stress.</p>
+    </div>
+    <div>
+      <h4>Sections</h4>
+      <ul>
+        <li><
